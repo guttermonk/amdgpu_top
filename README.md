@@ -149,6 +149,57 @@ OPTIONS:
 | M   | sort fdinfo by MediaEngine usage    |
 | R   | reverse sort                        |
 
+### Color scheme for TUI
+`--dark` and `--light` select between two built-in color schemes. To control
+the colors in more detail, write a file and amdgpu_top will apply it on top of
+whichever of the two is active.
+
+The file is looked for at `$AMDGPU_TOP_THEME`, then
+`$XDG_CONFIG_HOME/amdgpu_top/theme.conf`, then `$HOME/.config/amdgpu_top/theme.conf`.
+If none exists, the built-in scheme is used unchanged.
+
+One `slot = rrggbb` per line. The leading `#` on a color is optional, and a
+line whose first non-blank character is `#` is a comment. Unknown slot names
+and malformed values are ignored.
+
+```
+# ~/.config/amdgpu_top/theme.conf
+background = 383c4a
+view = 383c4a
+
+primary = f9f9f9
+secondary = cfd1d5
+tertiary = 848499
+
+title_primary = 5294e2
+title_secondary = 557091
+
+highlight = 5294e2
+highlight_inactive = 4b5162
+highlight_text = 2f343f
+
+shadow = 383c4a
+```
+
+The eleven slots are cursive's palette: `background` is the area behind the
+panels, `view` the panels themselves, `primary`/`secondary`/`tertiary` the text
+weights, and `title_primary`/`title_secondary` the panel titles.
+
+`highlight` and `highlight_text` are worth a note, because on this TUI they are
+mostly the meter bars rather than a selected row. A bar draws the filled part
+as `highlight_text` on `highlight`, then the empty part with the two reversed —
+so `highlight` is the fill, and **`highlight_text` is the trough**, a full-width
+background rather than a text color. Picking a bright color for it on the
+reasoning that it has to contrast with the accent gives you a bright bar at 0%,
+which is most of them when the GPU is idle. A recessed tone reads better and
+still carries the percentage, which is drawn on top of it in `highlight`.
+
+Slots the file does not name keep the value the built-in scheme gave them,
+including the derived ones -- so a file that wants `highlight_text` to differ
+from `view` has to say so.
+
+`--smi` is unaffected: SMI mode uses the terminal's own color scheme already.
+
 ### Example of using JSON mode
 ```
 $ amdgpu_top --json | jq -c -r '(.devices[] |

@@ -328,6 +328,8 @@ fn light_mode() -> Theme {
                 palette[HighlightText] = palette[View];
                 palette[Highlight] = palette[TitlePrimary];
                 palette[Shadow] = palette[Primary];
+
+                apply_theme_file(palette);
             }),
     }
 }
@@ -347,6 +349,83 @@ fn dark_mode() -> Theme {
 
                 palette[HighlightText] = palette[View];
                 palette[Highlight] = palette[TitlePrimary];
+
+                apply_theme_file(palette);
             }),
+    }
+}
+
+/// Overrides palette slots from a colour file, so the TUI can follow the
+/// system theme instead of the two hardcoded sets above.
+///
+/// Read from `$AMDGPU_TOP_THEME`, else `$XDG_CONFIG_HOME/amdgpu_top/theme.conf`,
+/// else `$HOME/.config/amdgpu_top/theme.conf`. A missing or unreadable file
+/// leaves the defaults standing, which is what an unconfigured install gets --
+/// so this is inert until someone writes the file.
+///
+/// The format is one `slot = rrggbb` per line. The `#` on a value is optional;
+/// a line whose first non-blank character is `#` is a comment. Unknown slot
+/// names and malformed values are skipped rather than rejected, so a file
+/// written against a different version cannot stop the TUI from starting.
+///
+/// Called LAST in each theme, after the derived assignments, so a file naming
+/// only some slots leaves the others -- derived ones included -- alone. A file
+/// that wants `highlight_text` to differ from `view` has to say so.
+///
+/// `--smi` is deliberately untouched: smi.rs already asks for
+/// `Theme::terminal_default()` and so inherits the terminal's own palette.
+fn apply_theme_file(palette: &mut Palette) {
+    use cursive::theme::PaletteColor::*;
+    use cursive::style::Color;
+
+    let path = match std::env::var_os("AMDGPU_TOP_THEME") {
+        Some(p) if !p.is_empty() => std::path::PathBuf::from(p),
+        _ => {
+            let (base, rest) = match std::env::var_os("XDG_CONFIG_HOME") {
+                Some(d) if !d.is_empty() => (d, "amdgpu_top/theme.conf"),
+                _ => match std::env::var_os("HOME") {
+                    Some(h) => (h, ".config/amdgpu_top/theme.conf"),
+                    None => return,
+                },
+            };
+            std::path::PathBuf::from(base).join(rest)
+        },
+    };
+
+    let Ok(text) = std::fs::read_to_string(&path) else { return };
+
+    for line in text.lines() {
+        let line = line.trim();
+
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+
+        let Some((name, value)) = line.split_once('=') else { continue };
+
+        let hex = value.trim().trim_start_matches('#');
+
+        if hex.len() != 6 {
+            continue;
+        }
+
+        let Ok(rgb) = u32::from_str_radix(hex, 16) else { continue };
+
+        let slot = match name.trim() {
+            "background" => Background,
+            "shadow" => Shadow,
+            "view" => View,
+            "primary" => Primary,
+            "secondary" => Secondary,
+            "tertiary" => Tertiary,
+            "title_primary" => TitlePrimary,
+            "title_secondary" => TitleSecondary,
+            "highlight" => Highlight,
+            "highlight_inactive" => HighlightInactive,
+            "highlight_text" => HighlightText,
+            _ => continue,
+        };
+
+        palette[slot] = Color::Rgb((rgb >> 16) as u8, (rgb >> 8) as u8, rgb as u8);
     }
 }
